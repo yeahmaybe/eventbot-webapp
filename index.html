@@ -77,16 +77,6 @@
 </div>
 
 <div class="section">
-  <div class="label">Банк для сборов денег</div>
-  <div class="options" id="fundraise">
-    <div class="opt" data-value="tbank"><span class="icon">💛</span>
-      <span>Т-Банк</span><span class="check">✓</span></div>
-    <div class="opt" data-value="yoomoney"><span class="icon">💜</span>
-      <span>ЮMoney</span><span class="check">✓</span></div>
-  </div>
-</div>
-
-<div class="section">
   <div class="label">Таймзона</div>
   <select id="tz"></select>
 </div>
@@ -96,7 +86,7 @@
   tg.ready(); tg.expand();
 
   const state = Object.assign(
-    { calendar: "google", maps: "yandex", tz: "Europe/Moscow", fundraise: "tbank" },
+    { calendar: "google", maps: "yandex", tz: "Europe/Moscow" },
     JSON.parse(localStorage.getItem("eventbot_settings") || "{}")
   );
 
@@ -130,7 +120,6 @@
   }
   bindGroup("calendar");
   bindGroup("maps");
-  bindGroup("fundraise");
 
   tg.MainButton.setText("Сохранить");
   tg.MainButton.show();

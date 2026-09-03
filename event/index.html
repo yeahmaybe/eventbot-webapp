@@ -220,10 +220,6 @@
     apple:   { name: "Apple (.ics)",     act: downloadIcs },
     ics:     { name: "Файл .ics",        act: downloadIcs },
   };
-  const FUNDS = {  // только сервисы с рабочей веб-страницей создания сбора
-    tbank:    { name: "Т-Банк",  url: "https://www.tbank.ru/payments-and-transfers/fundraise/" },
-    yoomoney: { name: "ЮMoney",  url: "https://promo.yoomoney.ru/topupwallet" },
-  };
   const MAPS = {
     yandex: { name: "Яндекс Карты", url: l => "https://yandex.ru/maps/?text=" + encodeURIComponent(l) },
     gis2:   { name: "2ГИС",         url: l => "https://2gis.ru/search/" + encodeURIComponent(l) },
@@ -259,7 +255,6 @@
     const my = localStorage.getItem(rsvpKey);
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
     if (e.l) html += `<div id="map">${section("Показать на карте", MAPS, localStorage.getItem("fav_map") || "yandex")}</div>`;
-    html += `<div id="fund">${section("Сбор денег", FUNDS, localStorage.getItem("fav_fund") || "tbank")}</div>`;
     html += `<div class="foot">Если .ics не скачивается — <a id="browser" href="#">открой страницу в браузере</a></div>`;
     // прилипающая панель снизу — удобно тыкать большим пальцем
     const vote = (v, label) =>
@@ -270,7 +265,6 @@
 
     wire("cal", "fav_cal", k => CALS[k].act(e));
     wire("map", "fav_map", k => go(MAPS[k].url(e.l)));
-    wire("fund", "fav_fund", k => go(FUNDS[k].url));
     document.getElementById("rsvp").onclick = t => {
       const r = t.target.dataset.r;
       if (!r) return;
