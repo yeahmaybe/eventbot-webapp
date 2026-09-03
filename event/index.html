@@ -6,28 +6,27 @@
 <title>Событие</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
+  /* своя палитра, чтобы вид не зависел от фона клиента Telegram */
   :root {
-    --bg: var(--tg-theme-bg-color, #f7f7f9);
-    --text: var(--tg-theme-text-color, #1a1a1e);
-    --hint: var(--tg-theme-hint-color, #8e8e93);
-    --accent: var(--tg-theme-button-color, #3478f6);
-    --accent-text: var(--tg-theme-button-text-color, #fff);
-    --card: var(--tg-theme-secondary-bg-color, #fff);
+    --bg: #f7f7f9;
+    --text: #1a1a1e;
+    --hint: #8e8e93;
+    --accent: #3478f6;
+    --accent-text: #fff;
+    --card: #fff;
+    --line: rgba(0, 0, 0, .08);
     --tint: color-mix(in srgb, var(--accent) 14%, var(--card));
     --tint-text: color-mix(in srgb, var(--accent) 85%, var(--text));
-    --line: rgba(0, 0, 0, .08);
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: var(--tg-theme-bg-color, #0e0e11);
-      --text: var(--tg-theme-text-color, #e6e6e9);
-      --hint: var(--tg-theme-hint-color, #6f6f78);
-      --card: var(--tg-theme-secondary-bg-color, #19191e);
-      --accent: var(--tg-theme-button-color, #4a72c4);
-      --line: rgba(255, 255, 255, .07);
-    }
-    .event { box-shadow: none; }  /* в тёмной хватает рамки */
+  :root[data-theme="dark"] {
+    --bg: #0e0e11;
+    --text: #e6e6e9;
+    --hint: #6f6f78;
+    --accent: #4a72c4;
+    --card: #19191e;
+    --line: rgba(255, 255, 255, .07);
   }
+  :root[data-theme="dark"] .event { box-shadow: none; }  /* в тёмной хватает рамки */
   * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
   body { background: var(--bg); color: var(--text);
     font-family: -apple-system, system-ui, Roboto, sans-serif;
@@ -75,6 +74,19 @@
     border-radius: 12px; padding: 11px 8px; font-size: 14px; font-weight: 500;
     cursor: pointer; transition: opacity .1s, transform .05s; }
   .alt:active { opacity: .7; transform: scale(.97); }
+  .alts.col { grid-template-columns: 1fr; }
+  .spoiler {
+    display: flex; align-items: center; justify-content: space-between;
+    width: 100%; margin-top: 20px; padding: 12px 14px;
+    background: transparent; color: var(--hint);
+    border: 1px solid var(--line); border-radius: 12px;
+    font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .06em; cursor: pointer;
+    transition: background .2s ease, color .2s ease;
+  }
+  .spoiler.open { background: var(--tint); color: var(--tint-text); }
+  .spoiler .caret { transition: transform .3s cubic-bezier(.22,1,.36,1); font-size: 12px; }
+  .spoiler.open .caret { transform: rotate(180deg); }
   .rsvpbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     display: flex; gap: 8px; max-width: 480px; margin: 0 auto;
@@ -83,16 +95,23 @@
   }
   .rsvpbar button {
     flex: 1; padding: 14px; border-radius: 12px;
-    font-size: 16px; font-weight: 600; cursor: pointer;
-    background: var(--tint); color: var(--tint-text);
+    font-size: 16px; font-weight: 500; cursor: pointer;
+    background: transparent; color: var(--hint);
     border: 1px solid var(--line);
-    transition: background .15s, transform .05s;
+    transition: background .25s cubic-bezier(.22,1,.36,1),
+                color .25s ease, opacity .25s ease,
+                border-color .25s ease, transform .12s cubic-bezier(.34,1.56,.64,1);
   }
-  .rsvpbar button:active { transform: scale(.97); }
-  .rsvpbar button.sel { border-color: transparent; color: #fff; }
-  .rsvpbar button.sel[data-r="y"] { background: #2f9e44; }
-  .rsvpbar button.sel[data-r="n"] { background: #e8860c; }
-  .rsvpbar button.dim { opacity: .45; }
+  .rsvpbar button:active { transform: scale(.96); }
+  .rsvpbar button.dim { opacity: .5; }
+  .rsvpbar button.sel { border-color: transparent; font-weight: 600; animation: press .3s cubic-bezier(.22,1,.36,1); }
+  .rsvpbar button.sel[data-r="y"] { background: var(--accent); color: var(--accent-text); }
+  .rsvpbar button.sel[data-r="n"] { background: var(--tint); color: var(--text); }
+  @keyframes press {
+    0% { transform: scale(.94); }
+    55% { transform: scale(1.03); }
+    100% { transform: none; }
+  }
   @keyframes rise {
     from { opacity: 0; transform: translateY(14px); }
     to { opacity: 1; transform: none; }
@@ -122,6 +141,21 @@
   const tg = window.Telegram.WebApp;
   tg.ready(); tg.expand();
   const inTelegram = Boolean(tg.initData) || location.hash.includes("tgWebAppData");
+
+  // тема — от клиента Telegram (или системная в браузере), цвета всегда наши
+  function applyTheme() {
+    const dark = inTelegram && tg.colorScheme
+      ? tg.colorScheme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    const bg = dark ? "#0e0e11" : "#f7f7f9";
+    tg.setBackgroundColor?.(bg);      // фон вебвью вокруг страницы
+    tg.setHeaderColor?.(bg);
+    tg.setBottomBarColor?.(bg);
+  }
+  applyTheme();
+  tg.onEvent?.("themeChanged", applyTheme);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
 
   function go(url) {  // в Telegram — нативно, в браузере — новая вкладка
     if (inTelegram) { tg.openLink(url); return; }
@@ -246,11 +280,21 @@
   }
 
   function render(e) {
+    const urls = (e.d || "").match(/https?:\/\/\S+/g) || [];
+    const note = (e.d || "").replace(/\s*https?:\/\/\S+\s*/g, " ").trim();
     let html = `<div class="event"><h1>📌 ${esc(e.t)}</h1>` +
       `<div class="row sub">🕐 ${fmt(e)}${e.a ? " · весь день" : ""}</div>`;
     if (e.l) html += `<div class="row sub">📍 ${esc(e.l)}</div>`;
-    if (e.d) html += `<div class="row mut">${esc(e.d)}</div>`;
+    if (note) html += `<div class="row mut">${esc(note)}</div>`;
     html += "</div>";
+    if (urls.length) {
+      const items = urls.map((u, i) =>
+        `<button class="alt" data-k="${i}">${esc(u.replace(/^https?:\/\/(www\.)?/, "").split("/")[0])}</button>`
+      ).join("");
+      html += `<div id="links"><button class="spoiler">` +
+        `<span>Ссылки · ${urls.length}</span><span class="caret">▾</span></button>` +
+        `<div class="altwrap"><div class="altclip"><div class="alts col">${items}</div></div></div></div>`;
+    }
     const rsvpKey = "rsvp_" + (payload || "").slice(-24);
     const my = localStorage.getItem(rsvpKey);
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
@@ -258,13 +302,26 @@
     html += `<div class="foot">Если .ics не скачивается — <a id="browser" href="#">открой страницу в браузере</a></div>`;
     // прилипающая панель снизу — удобно тыкать большим пальцем
     const vote = (v, label) =>
-      `<button class="${my === v ? "sel" : (my ? "dim" : "")}" data-r="${v}">` +
-      `${my === v ? "✓ " : ""}${label}</button>`;
-    html += `<div class="rsvpbar" id="rsvp">${vote("y", "Приду")}${vote("n", "Не приду")}</div>`;
+      `<button class="${my === v ? "sel" : (my ? "dim" : "")}" data-r="${v}">${label}</button>`;
+    html += `<div class="rsvpbar" id="rsvp">${vote("n", "Не приду")}${vote("y", "Приду")}</div>`;
     app.innerHTML = html;
 
     wire("cal", "fav_cal", k => CALS[k].act(e));
     wire("map", "fav_map", k => go(MAPS[k].url(e.l)));
+    if (urls.length) {
+      const box = document.getElementById("links");
+      box.onclick = t => {
+        const btn = t.target.closest("button");
+        if (!btn) return;
+        tg.HapticFeedback?.impactOccurred("light");
+        if (btn.classList.contains("spoiler")) {
+          btn.classList.toggle("open");
+          box.querySelector(".altwrap").classList.toggle("open");
+        } else {
+          go(urls[+btn.dataset.k]);
+        }
+      };
+    }
     document.getElementById("rsvp").onclick = t => {
       const r = t.target.dataset.r;
       if (!r) return;
@@ -292,7 +349,7 @@
       const k = btn.dataset.k;
       if (!k) return;
       tg.HapticFeedback?.impactOccurred("light");
-      if (btn.classList.contains("alt")) {  // выбранное становится дефолтом
+      if (favKey && btn.classList.contains("alt")) {  // выбранное становится дефолтом
         localStorage.setItem(favKey, k);
         render(ev);
         document.querySelector(`#${id} .primary`).classList.add("pop");
