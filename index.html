@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Настройки eventbot</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #fff);
+    --text: var(--tg-theme-text-color, #111);
+    --hint: var(--tg-theme-hint-color, #888);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-text: var(--tg-theme-button-text-color, #fff);
+    --card: var(--tg-theme-secondary-bg-color, #f2f2f7);
+  }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, system-ui, Roboto, sans-serif;
+    padding: 16px; max-width: 480px; margin: 0 auto;
+  }
+  h1 { font-size: 20px; margin: 8px 0 20px; }
+  .section { margin-bottom: 24px; }
+  .label { font-size: 13px; text-transform: uppercase; letter-spacing: .5px;
+           color: var(--hint); margin-bottom: 10px; }
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--card); border: 2px solid transparent;
+    border-radius: 14px; padding: 13px 14px;
+    font-size: 16px; cursor: pointer; transition: border-color .15s, transform .05s;
+  }
+  .opt:active { transform: scale(.98); }
+  .opt.selected { border-color: var(--accent); }
+  .opt .icon { font-size: 22px; width: 28px; text-align: center; }
+  .opt .check { margin-left: auto; color: var(--accent); font-size: 18px;
+                opacity: 0; transition: opacity .15s; }
+  .opt.selected .check { opacity: 1; }
+  .opt .sub { font-size: 12px; color: var(--hint); }
+  select {
+    width: 100%; padding: 13px 14px; font-size: 16px;
+    background: var(--card); color: var(--text);
+    border: 2px solid transparent; border-radius: 14px; appearance: none;
+  }
+</style>
+</head>
+<body>
+<h1>⚙️ Настройки</h1>
+
+<div class="section">
+  <div class="label">Календарь</div>
+  <div class="options" id="calendar">
+    <div class="opt" data-value="google"><span class="icon">📅</span>
+      <span>Google Calendar</span><span class="check">✓</span></div>
+    <div class="opt" data-value="outlook"><span class="icon">📅</span>
+      <span>Outlook</span><span class="check">✓</span></div>
+    <div class="opt" data-value="apple"><span class="icon"></span>
+      <span>Apple Calendar <div class="sub">через .ics-файл</div></span><span class="check">✓</span></div>
+    <div class="opt" data-value="yandex"><span class="icon">🟡</span>
+      <span>Яндекс Календарь <div class="sub">через .ics-файл</div></span><span class="check">✓</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Карты для места события</div>
+  <div class="options" id="maps">
+    <div class="opt" data-value="yandex"><span class="icon">🗺</span>
+      <span>Яндекс Карты</span><span class="check">✓</span></div>
+    <div class="opt" data-value="gis2"><span class="icon">🟢</span>
+      <span>2ГИС</span><span class="check">✓</span></div>
+    <div class="opt" data-value="google"><span class="icon">📍</span>
+      <span>Google Maps</span><span class="check">✓</span></div>
+    <div class="opt" data-value="apple"><span class="icon">🧭</span>
+      <span>Apple Maps</span><span class="check">✓</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Банк для сборов денег</div>
+  <div class="options" id="fundraise">
+    <div class="opt" data-value="tbank"><span class="icon">💛</span>
+      <span>Т-Банк</span><span class="check">✓</span></div>
+    <div class="opt" data-value="yoomoney"><span class="icon">💜</span>
+      <span>ЮMoney</span><span class="check">✓</span></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">Таймзона</div>
+  <select id="tz"></select>
+</div>
+
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.ready(); tg.expand();
+
+  const state = Object.assign(
+    { calendar: "google", maps: "yandex", tz: "Europe/Moscow", fundraise: "tbank" },
+    JSON.parse(localStorage.getItem("eventbot_settings") || "{}")
+  );
+
+  const TZS = ["Europe/Moscow", "Europe/Kaliningrad", "Asia/Yekaterinburg",
+    "Asia/Novosibirsk", "Asia/Krasnoyarsk", "Asia/Vladivostok",
+    "Europe/Belgrade", "Asia/Tbilisi", "Asia/Yerevan", "Asia/Almaty",
+    "Europe/London", "Europe/Berlin", "America/New_York", "Asia/Dubai"];
+  const auto = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (auto && !TZS.includes(auto)) TZS.unshift(auto);
+  if (!localStorage.getItem("eventbot_settings") && TZS.includes(auto)) state.tz = auto;
+
+  const tzSel = document.getElementById("tz");
+  for (const z of TZS) {
+    const o = document.createElement("option");
+    o.value = z; o.textContent = z + (z === auto ? " (у тебя)" : "");
+    tzSel.appendChild(o);
+  }
+  tzSel.value = state.tz;
+  tzSel.onchange = () => { state.tz = tzSel.value; };
+
+  function bindGroup(id) {
+    const group = document.getElementById(id);
+    const render = () => group.querySelectorAll(".opt").forEach(el =>
+      el.classList.toggle("selected", el.dataset.value === state[id]));
+    group.querySelectorAll(".opt").forEach(el => el.onclick = () => {
+      state[id] = el.dataset.value;
+      tg.HapticFeedback?.selectionChanged();
+      render();
+    });
+    render();
+  }
+  bindGroup("calendar");
+  bindGroup("maps");
+  bindGroup("fundraise");
+
+  tg.MainButton.setText("Сохранить");
+  tg.MainButton.show();
+  tg.MainButton.onClick(() => {
+    localStorage.setItem("eventbot_settings", JSON.stringify(state));
+    tg.sendData(JSON.stringify(state)); // прилетит боту как web_app_data и закроет мини-апп
+  });
+</script>
+</body>
+</html>

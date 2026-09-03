@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Событие</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #f7f7f9);
+    --text: var(--tg-theme-text-color, #1a1a1e);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --accent: var(--tg-theme-button-color, #3478f6);
+    --accent-text: var(--tg-theme-button-text-color, #fff);
+    --card: var(--tg-theme-secondary-bg-color, #fff);
+    --tint: color-mix(in srgb, var(--accent) 14%, var(--card));
+    --tint-text: color-mix(in srgb, var(--accent) 85%, var(--text));
+    --line: rgba(0, 0, 0, .08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: var(--tg-theme-bg-color, #0e0e11);
+      --text: var(--tg-theme-text-color, #e6e6e9);
+      --hint: var(--tg-theme-hint-color, #6f6f78);
+      --card: var(--tg-theme-secondary-bg-color, #19191e);
+      --accent: var(--tg-theme-button-color, #4a72c4);
+      --line: rgba(255, 255, 255, .07);
+    }
+    .event { box-shadow: none; }  /* в тёмной хватает рамки */
+  }
+  * { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: var(--bg); color: var(--text);
+    font-family: -apple-system, system-ui, Roboto, sans-serif;
+    padding: 16px 16px 104px; max-width: 480px; margin: 0 auto;
+    -webkit-font-smoothing: antialiased; }
+  .event { background: var(--card); border-radius: 16px; padding: 18px 16px; margin-bottom: 8px;
+    border: 1px solid var(--line);
+    box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.06); }
+  .event h1 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; margin-bottom: 10px; }
+  .event .row { font-size: 15px; line-height: 1.5; margin-top: 2px; }
+  .event .row.sub { color: color-mix(in srgb, var(--text) 72%, var(--hint)); }
+  .event .row.mut { color: var(--hint); margin-top: 8px; }
+  .label { font-size: 12px; font-weight: 600; text-transform: uppercase;
+           letter-spacing: .06em; color: var(--hint); margin: 20px 4px 8px; }
+  .prow { display: flex; gap: 6px; }
+  .primary {
+    flex: 1; text-align: center;
+    background: var(--tint); color: var(--tint-text);
+    border: 1px solid var(--line); border-radius: 12px; padding: 11px;
+    font-size: 15px; font-weight: 500; cursor: pointer;
+    transition: opacity .1s, transform .05s;
+  }
+  .primary:active { opacity: .85; transform: scale(.985); }
+  .chev {
+    width: 44px; background: var(--tint); color: var(--tint-text);
+    border: 1px solid var(--line); border-radius: 12px; font-size: 13px; cursor: pointer;
+    transition: background .2s ease;
+  }
+  .chev.open {
+    background: color-mix(in srgb, var(--accent) 25%, var(--card));
+  }
+  .altwrap {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows .35s cubic-bezier(.22, 1, .36, 1);
+  }
+  .altwrap.open { grid-template-rows: 1fr; }
+  .altclip { overflow: hidden; min-height: 0; }
+  .alts {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 8px;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity .25s ease, transform .3s cubic-bezier(.22, 1, .36, 1);
+  }
+  .altwrap.open .alts { opacity: 1; transform: none; }
+  .alt { background: var(--tint); color: var(--tint-text); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 8px; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: opacity .1s, transform .05s; }
+  .alt:active { opacity: .7; transform: scale(.97); }
+  .rsvpbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+    display: flex; gap: 8px; max-width: 480px; margin: 0 auto;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: var(--bg); border-top: 1px solid var(--line);
+  }
+  .rsvpbar button {
+    flex: 1; padding: 14px; border-radius: 12px;
+    font-size: 16px; font-weight: 600; cursor: pointer;
+    background: var(--tint); color: var(--tint-text);
+    border: 1px solid var(--line);
+    transition: background .15s, transform .05s;
+  }
+  .rsvpbar button:active { transform: scale(.97); }
+  .rsvpbar button.sel { border-color: transparent; color: #fff; }
+  .rsvpbar button.sel[data-r="y"] { background: #2f9e44; }
+  .rsvpbar button.sel[data-r="n"] { background: #e8860c; }
+  .rsvpbar button.dim { opacity: .45; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .intro .event { animation: rise .5s cubic-bezier(.22, 1, .36, 1) both; }
+  .intro #cal { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .08s both; }
+  .intro #map { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .16s both; }
+  .intro .foot { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .24s both; }
+  @keyframes pop {
+    0% { transform: scale(.92); }
+    60% { transform: scale(1.02); }
+    100% { transform: none; }
+  }
+  .primary.pop { animation: pop .35s cubic-bezier(.22, 1, .36, 1); }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  .foot { margin-top: 28px; font-size: 13px; line-height: 1.5;
+          color: var(--hint); text-align: center; }
+  .foot a { color: var(--accent); text-decoration: none; }
+  .err { color: var(--hint); text-align: center; padding: 48px 0; font-size: 15px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+  const tg = window.Telegram.WebApp;
+  tg.ready(); tg.expand();
+  const inTelegram = Boolean(tg.initData) || location.hash.includes("tgWebAppData");
+
+  function go(url) {  // в Telegram — нативно, в браузере — новая вкладка
+    if (inTelegram) { tg.openLink(url); return; }
+    if (!window.open(url, "_blank")) location.href = url;
+  }
+
+  function unpack(p) {
+    p = p.replace(/-/g, "+").replace(/_/g, "/");
+    while (p.length % 4) p += "=";
+    return JSON.parse(new TextDecoder().decode(
+      Uint8Array.from(atob(p), c => c.charCodeAt(0))));
+  }
+
+  function getPayload() {
+    if (tg.initDataUnsafe?.start_param) return tg.initDataUnsafe.start_param;
+    const q = new URLSearchParams(location.search);
+    if (q.get("e")) return q.get("e");
+    if (q.get("tgWebAppStartParam")) return q.get("tgWebAppStartParam");
+    return new URLSearchParams(location.hash.slice(1)).get("tgWebAppStartParam");
+  }
+  const payload = getPayload();
+  const app = document.getElementById("app");
+
+  function utc(m) { return new Date(m * 60000); }
+  function gdate(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
+  function fmt(e) {
+    if (e.a) return new Intl.DateTimeFormat("ru-RU",
+      { day: "2-digit", month: "long", year: "numeric" })
+      .format(new Date(e.s.slice(0,4), e.s.slice(4,6)-1, e.s.slice(6,8)));
+    return new Intl.DateTimeFormat("ru-RU",
+      { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: e.z })
+      .format(utc(e.s));
+  }
+
+  function googleUrl(e) {
+    const dates = e.a ? `${e.s}/${e.e}` : `${gdate(utc(e.s))}/${gdate(utc(e.e))}`;
+    const q = new URLSearchParams({ action: "TEMPLATE", text: e.t, dates, ctz: e.z });
+    if (e.l) q.set("location", e.l);
+    if (e.d) q.set("details", e.d);
+    return "https://calendar.google.com/calendar/render?" + q;
+  }
+  function localIso(e, m) {  // локальное время события в его таймзоне
+    return new Intl.DateTimeFormat("sv-SE",
+      { timeZone: e.z, dateStyle: "short", timeStyle: "medium" })
+      .format(utc(m)).replace(" ", "T");
+  }
+  function yandexUrl(e) {  // недокументированный deep-link Яндекс Календаря
+    const q = new URLSearchParams({ name: e.t });
+    if (e.a) {
+      q.set("startTs", `${e.s.slice(0,4)}-${e.s.slice(4,6)}-${e.s.slice(6,8)}`);
+      q.set("endTs", `${e.e.slice(0,4)}-${e.e.slice(4,6)}-${e.e.slice(6,8)}`);
+    } else {
+      q.set("startTs", localIso(e, e.s));
+      q.set("endTs", localIso(e, e.e));
+    }
+    if (e.l) q.set("location", e.l);
+    if (e.d) q.set("description", e.d);
+    return "https://calendar.yandex.ru/event?" + q;
+  }
+  function outlookUrl(e) {
+    const iso = m => utc(m).toISOString().replace(/\.\d{3}/, "");
+    const q = new URLSearchParams({ path: "/calendar/action/compose", rru: "addevent",
+      subject: e.t,
+      startdt: e.a ? `${e.s.slice(0,4)}-${e.s.slice(4,6)}-${e.s.slice(6,8)}` : iso(e.s),
+      enddt: e.a ? `${e.e.slice(0,4)}-${e.e.slice(4,6)}-${e.e.slice(6,8)}` : iso(e.e) });
+    if (e.a) q.set("allday", "true");
+    if (e.l) q.set("location", e.l);
+    if (e.d) q.set("body", e.d);
+    return "https://outlook.live.com/calendar/0/deeplink/compose?" + q;
+  }
+  function icsText(e) {
+    const esc = s => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;")
+      .replace(/,/g, "\\,").replace(/\n/g, "\\n");
+    const dt = e.a
+      ? `DTSTART;VALUE=DATE:${e.s}\r\nDTEND;VALUE=DATE:${e.e}`
+      : `DTSTART:${gdate(utc(e.s))}\r\nDTEND:${gdate(utc(e.e))}`;
+    const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//eventbot//RU",
+      "BEGIN:VEVENT", `UID:${Date.now()}@eventbot`,
+      `DTSTAMP:${gdate(new Date())}`, dt, `SUMMARY:${esc(e.t)}`];
+    if (e.l) lines.push(`LOCATION:${esc(e.l)}`);
+    if (e.d) lines.push(`DESCRIPTION:${esc(e.d)}`);
+    lines.push("END:VEVENT", "END:VCALENDAR");
+    return lines.join("\r\n");
+  }
+  function downloadIcs(e) {
+    const url = URL.createObjectURL(new Blob([icsText(e)], { type: "text/calendar" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "event.ics"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  const CALS = {
+    google:  { name: "Google Calendar",  act: e => go(googleUrl(e)) },
+    yandex:  { name: "Яндекс Календарь", act: e => go(yandexUrl(e)) },
+    outlook: { name: "Outlook",          act: e => go(outlookUrl(e)) },
+    apple:   { name: "Apple (.ics)",     act: downloadIcs },
+    ics:     { name: "Файл .ics",        act: downloadIcs },
+  };
+  const FUNDS = {  // только сервисы с рабочей веб-страницей создания сбора
+    tbank:    { name: "Т-Банк",  url: "https://www.tbank.ru/payments-and-transfers/fundraise/" },
+    yoomoney: { name: "ЮMoney",  url: "https://promo.yoomoney.ru/topupwallet" },
+  };
+  const MAPS = {
+    yandex: { name: "Яндекс Карты", url: l => "https://yandex.ru/maps/?text=" + encodeURIComponent(l) },
+    gis2:   { name: "2ГИС",         url: l => "https://2gis.ru/search/" + encodeURIComponent(l) },
+    google: { name: "Google Maps",  url: l => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(l) },
+    apple:  { name: "Apple Maps",   url: l => "https://maps.apple.com/?q=" + encodeURIComponent(l) },
+  };
+
+  function section(title, opts, fav) {
+    const order = Object.keys(opts).sort((a, b) => (b === fav) - (a === fav));
+    const first = order[0];
+    let html = `<div class="label">${title}</div><div class="prow">` +
+      `<button class="primary" data-k="${first}">${opts[first].name}</button>`;
+    if (order.length === 1) return html + "</div>";  // выбирать не из чего
+    html += `<button class="chev" aria-label="Выбрать другой способ">▾</button></div>` +
+      `<div class="altwrap"><div class="altclip"><div class="alts">`;
+    for (const k of order.slice(1))
+      html += `<button class="alt" data-k="${k}">${opts[k].name}</button>`;
+    return html + "</div></div></div>";
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function render(e) {
+    let html = `<div class="event"><h1>📌 ${esc(e.t)}</h1>` +
+      `<div class="row sub">🕐 ${fmt(e)}${e.a ? " · весь день" : ""}</div>`;
+    if (e.l) html += `<div class="row sub">📍 ${esc(e.l)}</div>`;
+    if (e.d) html += `<div class="row mut">${esc(e.d)}</div>`;
+    html += "</div>";
+    const rsvpKey = "rsvp_" + (payload || "").slice(-24);
+    const my = localStorage.getItem(rsvpKey);
+    html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
+    if (e.l) html += `<div id="map">${section("Показать на карте", MAPS, localStorage.getItem("fav_map") || "yandex")}</div>`;
+    html += `<div id="fund">${section("Сбор денег", FUNDS, localStorage.getItem("fav_fund") || "tbank")}</div>`;
+    html += `<div class="foot">Если .ics не скачивается — <a id="browser" href="#">открой страницу в браузере</a></div>`;
+    // прилипающая панель снизу — удобно тыкать большим пальцем
+    const vote = (v, label) =>
+      `<button class="${my === v ? "sel" : (my ? "dim" : "")}" data-r="${v}">` +
+      `${my === v ? "✓ " : ""}${label}</button>`;
+    html += `<div class="rsvpbar" id="rsvp">${vote("y", "Приду")}${vote("n", "Не приду")}</div>`;
+    app.innerHTML = html;
+
+    wire("cal", "fav_cal", k => CALS[k].act(e));
+    wire("map", "fav_map", k => go(MAPS[k].url(e.l)));
+    wire("fund", "fav_fund", k => go(FUNDS[k].url));
+    document.getElementById("rsvp").onclick = t => {
+      const r = t.target.dataset.r;
+      if (!r) return;
+      tg.HapticFeedback?.impactOccurred("light");
+      localStorage.setItem(rsvpKey, r);
+      render(ev);
+    };
+    document.getElementById("browser").onclick = ev2 => {
+      ev2.preventDefault();
+      go(location.origin + location.pathname + "?e=" + payload);
+    };
+  }
+
+  function wire(id, favKey, run) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", t => {
+      const btn = t.target.closest("button");
+      if (!btn) return;
+      if (btn.classList.contains("chev")) {
+        btn.classList.toggle("open");
+        el.querySelector(".altwrap").classList.toggle("open");
+        return;
+      }
+      const k = btn.dataset.k;
+      if (!k) return;
+      tg.HapticFeedback?.impactOccurred("light");
+      if (btn.classList.contains("alt")) {  // выбранное становится дефолтом
+        localStorage.setItem(favKey, k);
+        render(ev);
+        document.querySelector(`#${id} .primary`).classList.add("pop");
+      }
+      run(k);
+    });
+  }
+
+  let ev = null;
+  try { if (payload) ev = unpack(payload); } catch (e) {}
+  if (ev) {
+    document.body.classList.add("intro");  // каскад только при первом открытии
+    render(ev);
+    setTimeout(() => document.body.classList.remove("intro"), 900);
+  }
+  else app.innerHTML = payload
+    ? '<div class="err">Не удалось открыть событие — ссылка повреждена.</div>'
+    : '<div class="err">Событие не передано — открой страницу по кнопке из чата с ботом.</div>';
+</script>
+</body>
+</html>
