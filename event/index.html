@@ -189,13 +189,14 @@
 
   function utc(m) { return new Date(m * 60000); }
   function gdate(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
+  function cap(s) { return s ? s[0].toUpperCase() + s.slice(1) : s; }
   function fmt(e) {
-    if (e.a) return new Intl.DateTimeFormat("ru-RU",
-      { day: "2-digit", month: "long", year: "numeric" })
-      .format(new Date(e.s.slice(0,4), e.s.slice(4,6)-1, e.s.slice(6,8)));
-    return new Intl.DateTimeFormat("ru-RU",
-      { day: "2-digit", month: "long", hour: "2-digit", minute: "2-digit", timeZone: e.z })
-      .format(utc(e.s));
+    const d = e.a ? new Date(e.s.slice(0,4), e.s.slice(4,6)-1, e.s.slice(6,8)) : utc(e.s);
+    const year = (e.a ? d.getFullYear() : +new Intl.DateTimeFormat("en", { year: "numeric", timeZone: e.z }).format(d));
+    const opts = { weekday: "short", day: "numeric", month: "long" };  // «сб, 5 сентября»
+    if (year !== new Date().getFullYear()) opts.year = "numeric";
+    if (!e.a) { opts.hour = "2-digit"; opts.minute = "2-digit"; opts.timeZone = e.z; }
+    return new Intl.DateTimeFormat("ru-RU", opts).format(d).replace(" г.", "").replace(",", ",");
   }
 
   function googleUrl(e) {
@@ -249,6 +250,10 @@
     return lines.join("\r\n");
   }
   function downloadIcs(e) {
+    if (inTelegram) {  // из вебвью .ics не скачать — открываем страницу в браузере, она скачает сама
+      go(location.origin + location.pathname + "?e=" + payload + "&dl=1");
+      return;
+    }
     const url = URL.createObjectURL(new Blob([icsText(e)], { type: "text/calendar" }));
     const a = document.createElement("a");
     a.href = url; a.download = "event.ics"; a.click();
@@ -295,8 +300,8 @@
       .map(p => p.trim().replace(/^[.\s]+|[.\s]+$/g, "")).join(", ");
     let html = `<div class="event"><h1>📌 ${esc(e.t)}</h1>` +
       `<div class="row sub">🕐 ${fmt(e)}${e.a ? " · весь день" : ""}</div>`;
-    if (e.l) html += `<div class="row sub">📍 ${esc(e.l)}</div>`;
-    if (note) html += `<div class="row mut">${esc(note)}</div>`;
+    if (e.l) html += `<div class="row sub">📍 ${esc(cap(e.l))}</div>`;
+    if (note) html += `<div class="row mut">${esc(cap(note))}</div>`;
     html += "</div>";
     if (urls.length) {
       const items = urls.map((u, i) =>  // ссылка как есть, без сокращений
@@ -306,14 +311,14 @@
         `<span>Ссылки · ${urls.length}</span><span class="caret">▾</span></button>` +
         `<div class="altwrap"><div class="altclip"><div class="alts col">${items}</div></div></div></div>`;
     }
-    // ключ от всего payload: у разных событий хвосты могут совпадать
+    // ключ голоса — стабильный id события (переживает правки);
+    // для старых ссылок без id — хэш всего payload
     let h = 5381;
     for (const c of (payload || "")) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
-    const rsvpKey = "rsvp_" + h.toString(36);
+    const rsvpKey = "rsvp_" + (e.i || h.toString(36));
     const my = localStorage.getItem(rsvpKey);
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
     if (e.l) html += `<div id="map">${section("Показать на карте", MAPS, localStorage.getItem("fav_map") || "yandex")}</div>`;
-    html += `<div class="foot">Если .ics не скачивается — <a id="browser" href="#">открой страницу в браузере</a></div>`;
     // прилипающая панель снизу — удобно тыкать большим пальцем
     const vote = (v, label) =>
       `<button class="${my === v ? "sel" : (my ? "dim" : "")}" data-r="${v}">${label}</button>`;
@@ -349,10 +354,6 @@
       render(ev);
       document.querySelector(`#rsvp button[data-r="${r}"]`)?.classList.add("just");
     };
-    document.getElementById("browser").onclick = ev2 => {
-      ev2.preventDefault();
-      go(location.origin + location.pathname + "?e=" + payload);
-    };
   }
 
   function wire(id, favKey, run) {
@@ -384,6 +385,7 @@
     document.body.classList.add("intro");  // каскад только при первом открытии
     render(ev);
     setTimeout(() => document.body.classList.remove("intro"), 900);
+    if (new URLSearchParams(location.search).get("dl") === "1") downloadIcs(ev);  // пришли из Telegram за .ics
   }
   else app.innerHTML = payload
     ? '<div class="err">Не удалось открыть событие — ссылка повреждена.</div>'
