@@ -241,14 +241,15 @@
   const payload = getPayload();
   const app = document.getElementById("app");
   const API = (document.querySelector('meta[name="api-base"]')?.content || "").replace(/\/$/, "");
-  let people = null;   // {creator, going, not_going, me} с API; null — API нет
+  let state = null;  // снапшот события с API: {creator, going, not_going, me, receipts, total}
+                     // null — API не задан, работаем локально (голос только на этом устройстве)
   let tab = "event";
 
-  async function loadPeople(id) {
+  async function loadState(id) {
     if (!API || !id) return;
     try {
       const r = await fetch(`${API}/api/event/${id}?initData=${encodeURIComponent(tg.initData || "")}`);
-      if (r.ok) { people = await r.json(); render(ev); }
+      if (r.ok) { state = await r.json(); render(ev); }
     } catch (e) {}
   }
   async function apiPost(path, body) {
@@ -271,7 +272,7 @@
       // по умолчанию переводить тому, кто добавил чек; можно указать другое
       const payto = confirm("Переводить за этот чек тебе?\nОК — да, Отмена — указать другие реквизиты")
         ? undefined : askPayto(null);
-      try { people = await apiPost("/api/receipt", { id: ev.i, qr, payto }); render(ev); }
+      try { state = await apiPost("/api/receipt", { id: ev.i, qr, payto }); render(ev); }
       catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
     };
     if (inTelegram && tg.showScanQrPopup) {
@@ -304,7 +305,7 @@
   }
 
   function renderReceipts() {
-    const list = people.receipts || [];
+    const list = state.receipts || [];
     let html = `<button class="scan" id="scan">Сканировать чек</button>`;
     if (!list.length) {
       html += `<div class="empty">Чеков пока нет. Отсканируй QR с чека — сумма попадёт в общий счёт,` +
@@ -333,7 +334,7 @@
         (r.can_delete ? `<button class="alt danger" data-d="${r.id}">Удалить</button>` : "") +
         `</div></div></div></div>`;
     }
-    if (list.length) html += `<div class="total"><span>Итого</span><b>${money(people.total)}</b></div>`;
+    if (list.length) html += `<div class="total"><span>Итого</span><b>${money(state.total)}</b></div>`;
     return html;
   }
 
@@ -342,7 +343,7 @@
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ initData: tg.initData || "", id, answer }),
     });
-    if (r.ok) people = await r.json();
+    if (r.ok) state = await r.json();
   }
 
   function initials(name) {
@@ -356,7 +357,7 @@
       `${p.username ? `<span class="un">@${esc(p.username)}</span>` : ""}</span></button>`;
   }
   function renderPeople() {
-    const { creator, going, not_going } = people;
+    const { creator, going, not_going } = state;
     let html = "";
     if (creator) html += `<div class="label">Организатор</div><div class="plist">${personRow(creator, "yes")}</div>`;
     html += `<div class="label">Идут · ${going.length}</div><div class="plist">` +
@@ -496,12 +497,12 @@
     for (const c of (payload || "")) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
     const rsvpKey = "rsvp_" + (e.i || h.toString(36));
     // голос: с API — из базы бота (учитывает и «я приду» текстом в чате), иначе локальный
-    const my = people ? people.me : localStorage.getItem(rsvpKey);
-    if (people) {
-      const n = people.going.length, nr = (people.receipts || []).length;
+    const my = state ? state.me : localStorage.getItem(rsvpKey);
+    if (state) {
+      const n = state.going.length, nr = (state.receipts || []).length;
       html = `<div class="tabs">` +
         `<button class="tab${tab === "event" ? " on" : ""}" data-t="event">Событие</button>` +
-        `<button class="tab${tab === "people" ? " on" : ""}" data-t="people">Люди${n ? " · " + n : ""}</button>` +
+        `<button class="tab${tab === "state" ? " on" : ""}" data-t="state">Люди${n ? " · " + n : ""}</button>` +
         `<button class="tab${tab === "money" ? " on" : ""}" data-t="money">Чеки${nr ? " · " + nr : ""}</button></div>` +
         (tab === "event" ? html : tab === "people" ? renderPeople() : renderReceipts());
     }
@@ -530,19 +531,19 @@
       } else if (btn.dataset.f) {
         go(`${API}/api/receipt/${btn.dataset.f}/file`);
       } else if (btn.dataset.d) {
-        try { people = await apiPost("/api/receipt/delete", { receipt_id: btn.dataset.d }); render(ev); }
+        try { state = await apiPost("/api/receipt/delete", { receipt_id: btn.dataset.d }); render(ev); }
         catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
       } else if (btn.dataset.pay) {
-        const rec = people.receipts.find(x => x.id === btn.dataset.pay);
+        const rec = state.receipts.find(x => x.id === btn.dataset.pay);
         const payto = askPayto(rec && rec.payto);
         if (!payto) return;
-        try { people = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.pay, payto }); render(ev); }
+        try { state = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.pay, payto }); render(ev); }
         catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
       } else if (btn.dataset.amt) {
-        const rec = people.receipts.find(x => x.id === btn.dataset.amt);
+        const rec = state.receipts.find(x => x.id === btn.dataset.amt);
         const value = prompt("Сумма чека, ₽", rec && rec.amount != null ? rec.amount : "");
         if (value === null) return;
-        try { people = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.amt, amount: value.replace(",", ".") }); render(ev); }
+        try { state = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.amt, amount: value.replace(",", ".") }); render(ev); }
         catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
       }
     });
@@ -571,9 +572,9 @@
       const r = t.target.dataset.r;
       if (!r) return;
       tg.HapticFeedback?.impactOccurred("light");
-      const current = people ? people.me : localStorage.getItem(rsvpKey);
+      const current = state ? state.me : localStorage.getItem(rsvpKey);
       const next = current === r ? null : r;  // повторный тап — снять ответ
-      if (people && e.i) {
+      if (state && e.i) {
         try { await sendRsvp(e.i, next); } catch (err) {}
       } else {
         next ? localStorage.setItem(rsvpKey, next) : localStorage.removeItem(rsvpKey);
@@ -612,7 +613,7 @@
     document.body.classList.add("intro");  // каскад только при первом открытии
     render(ev);
     setTimeout(() => document.body.classList.remove("intro"), 900);
-    loadPeople(ev.i);  // участники и мой голос — из базы бота, если есть API
+    loadState(ev.i);  // участники, голоса и чеки — из базы бота, если есть API
     if (new URLSearchParams(location.search).get("dl") === "1") downloadIcs(ev);  // пришли из Telegram за .ics
   }
   else app.innerHTML = payload
