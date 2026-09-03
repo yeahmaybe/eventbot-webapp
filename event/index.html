@@ -75,6 +75,8 @@
     cursor: pointer; transition: opacity .1s, transform .05s; }
   .alt:active { opacity: .7; transform: scale(.97); }
   .alts.col { grid-template-columns: 1fr; }
+  .alt.link { text-align: left; font-size: 13px; font-family: var(--mono, ui-monospace, Menlo, monospace);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 12px 14px; }
   .spoiler {
     display: flex; align-items: center; justify-content: space-between;
     width: 100%; margin-top: 20px; padding: 12px 14px;
@@ -104,9 +106,17 @@
   }
   .rsvpbar button:active { transform: scale(.96); }
   .rsvpbar button.dim { opacity: .5; }
-  .rsvpbar button.sel { border-color: transparent; font-weight: 600; animation: press .3s cubic-bezier(.22,1,.36,1); }
-  .rsvpbar button.sel[data-r="y"] { background: var(--accent); color: var(--accent-text); }
-  .rsvpbar button.sel[data-r="n"] { background: var(--tint); color: var(--text); }
+  .rsvpbar button.sel { font-weight: 600; }
+  /* пружинит только что нажатая кнопка, а не при каждом перерендере */
+  .rsvpbar button.sel.just { animation: press .3s cubic-bezier(.22,1,.36,1); }
+  .rsvpbar button.sel[data-r="y"] {
+    border-color: #3d9a63; color: #3d9a63;
+    background: color-mix(in srgb, #3d9a63 10%, transparent);
+  }
+  .rsvpbar button.sel[data-r="n"] {
+    border-color: var(--hint); color: var(--text);
+    background: color-mix(in srgb, var(--hint) 12%, transparent);
+  }
   @keyframes press {
     0% { transform: scale(.94); }
     55% { transform: scale(1.03); }
@@ -288,8 +298,8 @@
     if (note) html += `<div class="row mut">${esc(note)}</div>`;
     html += "</div>";
     if (urls.length) {
-      const items = urls.map((u, i) =>
-        `<button class="alt" data-k="${i}">${esc(u.replace(/^https?:\/\/(www\.)?/, "").split("/")[0])}</button>`
+      const items = urls.map((u, i) =>  // ссылка как есть, без сокращений
+        `<button class="alt link" data-k="${i}" title="${esc(u)}">${esc(u)}</button>`
       ).join("");
       html += `<div id="links"><button class="spoiler">` +
         `<span>Ссылки · ${urls.length}</span><span class="caret">▾</span></button>` +
@@ -328,6 +338,7 @@
       tg.HapticFeedback?.impactOccurred("light");
       localStorage.setItem(rsvpKey, r);
       render(ev);
+      document.querySelector(`#rsvp button[data-r="${r}"]`)?.classList.add("just");
     };
     document.getElementById("browser").onclick = ev2 => {
       ev2.preventDefault();
