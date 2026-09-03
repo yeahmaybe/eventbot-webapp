@@ -15,8 +15,8 @@
     --accent-text: #fff;
     --card: #fff;
     --line: rgba(0, 0, 0, .08);
-    --tint: color-mix(in srgb, var(--accent) 14%, var(--card));
-    --tint-text: color-mix(in srgb, var(--accent) 85%, var(--text));
+    --tint: var(--card);       /* кнопки — цвета карточки, без синей заливки */
+    --tint-text: var(--text);
   }
   :root[data-theme="dark"] {
     --bg: #0e0e11;
@@ -55,9 +55,7 @@
     border: 1px solid var(--line); border-radius: 12px; font-size: 13px; cursor: pointer;
     transition: background .2s ease;
   }
-  .chev.open {
-    background: color-mix(in srgb, var(--accent) 25%, var(--card));
-  }
+  .chev.open { border-color: var(--hint); }
   .altwrap {
     display: grid; grid-template-rows: 0fr;
     transition: grid-template-rows .35s cubic-bezier(.22, 1, .36, 1);
@@ -86,7 +84,7 @@
     letter-spacing: .06em; cursor: pointer;
     transition: background .2s ease, color .2s ease;
   }
-  .spoiler.open { background: var(--tint); color: var(--tint-text); }
+  .spoiler.open { color: var(--text); border-color: var(--hint); }
   .spoiler .caret { transition: transform .3s cubic-bezier(.22,1,.36,1); font-size: 12px; }
   .spoiler.open .caret { transform: rotate(180deg); }
   .rsvpbar {
