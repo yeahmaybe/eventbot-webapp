@@ -114,7 +114,27 @@
   .person.yes .ava { background: color-mix(in srgb, #3d9a63 25%, var(--card)); color: #3d9a63; }
   .person .who { display: flex; flex-direction: column; min-width: 0; }
   .person .un { font-size: 12px; color: var(--hint); }
-  .empty { color: var(--hint); font-size: 14px; padding: 8px 4px; }
+  .empty { color: var(--hint); font-size: 14px; padding: 8px 4px; line-height: 1.5; }
+  .scan {
+    width: 100%; padding: 13px; margin-bottom: 12px; border-radius: 12px;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    font-size: 15px; font-weight: 500; cursor: pointer; transition: transform .05s;
+  }
+  .scan:active { transform: scale(.98); }
+  .receipt { margin-bottom: 8px; }
+  .receipt .spoiler { margin-top: 0; text-transform: none; letter-spacing: 0; font-size: 15px;
+    font-weight: 400; color: var(--text); background: var(--card); }
+  .receipt .sum { font-weight: 600; }
+  .rbody { padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .rrow { display: flex; justify-content: space-between; font-size: 13px;
+    color: var(--hint); padding: 0 4px; }
+  .rrow b { color: var(--text); font-weight: 500; font-family: ui-monospace, Menlo, monospace; }
+  .total { display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 16px; padding: 14px; border-radius: 12px; background: var(--card);
+    border: 1px solid var(--line); font-size: 15px; }
+  .total b { font-size: 20px; font-weight: 600; }
+  .rrow .tolink { color: var(--accent); cursor: pointer; }
+  .alt.danger { color: #c0563f; }
   .rsvpbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     display: flex; gap: 8px; max-width: 480px; margin: 0 auto;
@@ -225,6 +245,92 @@
       if (r.ok) { people = await r.json(); render(ev); }
     } catch (e) {}
   }
+  async function apiPost(path, body) {
+    const r = await fetch(`${API}${path}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: tg.initData || "", ...body }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "ошибка");
+    return data;
+  }
+
+  function money(v) {
+    return new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB",
+      maximumFractionDigits: 2 }).format(v || 0);
+  }
+
+  function scanReceipt() {
+    const send = async qr => {
+      // по умолчанию переводить тому, кто добавил чек; можно указать другое
+      const payto = confirm("Переводить за этот чек тебе?\nОК — да, Отмена — указать другие реквизиты")
+        ? undefined : askPayto(null);
+      try { people = await apiPost("/api/receipt", { id: ev.i, qr, payto }); render(ev); }
+      catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
+    };
+    if (inTelegram && tg.showScanQrPopup) {
+      tg.showScanQrPopup({ text: "Наведи на QR-код чека" }, qr => { tg.closeScanQrPopup(); send(qr); return true; });
+    } else {
+      const qr = prompt("Строка из QR-кода чека (t=…&s=…&fn=…&i=…&fp=…)");
+      if (qr) send(qr);
+    }
+  }
+
+  const PAYTO_LABEL = { tg: "Телеграм", phone: "Телефон", card: "Карта" };
+  function paytoText(p) {
+    if (!p || !p.value) return "—";
+    if (p.kind === "tg") return "@" + p.value;
+    if (p.kind === "phone") return "+" + p.value;
+    return p.value.replace(/(.{4})/g, "$1 ").trim();  // карта по 4 цифры
+  }
+
+  function askPayto(current) {
+    const kinds = ["tg", "phone", "card"];
+    const cur = current && current.kind ? current.kind : "tg";
+    const kind = prompt("Куда переводить за чек?\n1 — телеграм, 2 — телефон, 3 — карта",
+      String(kinds.indexOf(cur) + 1));
+    if (kind === null) return undefined;                       // отмена
+    const k = kinds[+kind - 1];
+    if (!k) return undefined;
+    const value = prompt(`${PAYTO_LABEL[k]}: значение`, current && current.value || "");
+    if (value === null || !value.trim()) return undefined;
+    return { kind: k, value: value.trim(), name: current && current.name || null };
+  }
+
+  function renderReceipts() {
+    const list = people.receipts || [];
+    let html = `<button class="scan" id="scan">Сканировать чек</button>`;
+    if (!list.length) {
+      html += `<div class="empty">Чеков пока нет. Отсканируй QR с чека — сумма попадёт в общий счёт,` +
+        ` а фото можно прислать боту ответом на карточку события.</div>`;
+    }
+    for (const r of list) {
+      const when = r.ts ? new Intl.DateTimeFormat("ru-RU",
+        { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(r.ts)) : "без даты";
+      const pay = r.payto || {};
+      const payLink = pay.kind === "tg" && pay.value ? `https://t.me/${pay.value}` : "";
+      html += `<div class="receipt" data-r="${r.id}">` +
+        `<button class="spoiler rline"><span>${when}</span>` +
+        `<span class="sum">${r.amount != null ? money(r.amount) : "—"}<span class="caret"> ▾</span></span></button>` +
+        `<div class="altwrap"><div class="altclip"><div class="rbody">` +
+        (r.name ? `<div class="rrow"><span>Добавил</span><b>${esc(r.name)}</b></div>` : "") +
+        `<div class="rrow"><span>Перевод</span>` +
+          (payLink ? `<b class="tolink" data-p="${esc(pay.value)}">${esc(paytoText(pay))}</b>`
+                   : `<b>${esc(paytoText(pay))}</b>`) +
+          (pay.kind && pay.kind !== "tg" ? ` <span>· ${PAYTO_LABEL[pay.kind]}</span>` : "") + `</div>` +
+        (r.fn ? `<div class="rrow"><span>ФН</span><b>${esc(r.fn)}</b></div>
+                <div class="rrow"><span>ФД</span><b>${esc(r.fd)}</b></div>
+                <div class="rrow"><span>ФП</span><b>${esc(r.fp)}</b></div>` : "") +
+        (r.file_id ? `<button class="alt open" data-f="${r.id}">Открыть чек</button>` : "") +
+        (r.mine ? `<button class="alt" data-pay="${r.id}">Куда переводить</button>` +
+                  `<button class="alt" data-amt="${r.id}">Изменить сумму</button>` : "") +
+        (r.can_delete ? `<button class="alt danger" data-d="${r.id}">Удалить</button>` : "") +
+        `</div></div></div></div>`;
+    }
+    if (list.length) html += `<div class="total"><span>Итого</span><b>${money(people.total)}</b></div>`;
+    return html;
+  }
+
   async function sendRsvp(id, answer) {
     const r = await fetch(`${API}/api/rsvp`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -386,11 +492,12 @@
     // голос: с API — из базы бота (учитывает и «я приду» текстом в чате), иначе локальный
     const my = people ? people.me : localStorage.getItem(rsvpKey);
     if (people) {
-      const n = people.going.length;
+      const n = people.going.length, nr = (people.receipts || []).length;
       html = `<div class="tabs">` +
         `<button class="tab${tab === "event" ? " on" : ""}" data-t="event">Событие</button>` +
-        `<button class="tab${tab === "people" ? " on" : ""}" data-t="people">Участники${n ? " · " + n : ""}</button></div>` +
-        (tab === "event" ? html : renderPeople());
+        `<button class="tab${tab === "people" ? " on" : ""}" data-t="people">Люди${n ? " · " + n : ""}</button>` +
+        `<button class="tab${tab === "money" ? " on" : ""}" data-t="money">Чеки${nr ? " · " + nr : ""}</button></div>` +
+        (tab === "event" ? html : tab === "people" ? renderPeople() : renderReceipts());
     }
     if (tab === "event") {
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
@@ -403,6 +510,36 @@
     app.innerHTML = html;
 
     document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.t; render(ev); });
+    const scan = document.getElementById("scan");
+    if (scan) scan.onclick = scanReceipt;
+    document.querySelectorAll(".receipt").forEach(box => box.onclick = async t => {
+      const btn = t.target.closest("button");
+      if (!btn) return;
+      if (btn.classList.contains("spoiler")) {
+        btn.classList.toggle("open");
+        box.querySelector(".altwrap").classList.toggle("open");
+      } else if (t.target.classList.contains("tolink")) {
+        const url = "https://t.me/" + t.target.dataset.p;
+        inTelegram ? tg.openTelegramLink(url) : go(url);
+      } else if (btn.dataset.f) {
+        go(`${API}/api/receipt/${btn.dataset.f}/file`);
+      } else if (btn.dataset.d) {
+        try { people = await apiPost("/api/receipt/delete", { receipt_id: btn.dataset.d }); render(ev); }
+        catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
+      } else if (btn.dataset.pay) {
+        const rec = people.receipts.find(x => x.id === btn.dataset.pay);
+        const payto = askPayto(rec && rec.payto);
+        if (!payto) return;
+        try { people = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.pay, payto }); render(ev); }
+        catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
+      } else if (btn.dataset.amt) {
+        const rec = people.receipts.find(x => x.id === btn.dataset.amt);
+        const value = prompt("Сумма чека, ₽", rec && rec.amount != null ? rec.amount : "");
+        if (value === null) return;
+        try { people = await apiPost("/api/receipt/edit", { receipt_id: btn.dataset.amt, amount: value.replace(",", ".") }); render(ev); }
+        catch (err) { tg.showAlert ? tg.showAlert(err.message) : alert(err.message); }
+      }
+    });
     document.querySelectorAll(".person[data-u]").forEach(b => b.onclick = () => {
       tg.HapticFeedback?.impactOccurred("light");
       const url = "https://t.me/" + b.dataset.u;
