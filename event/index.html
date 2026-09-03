@@ -291,7 +291,10 @@
 
   function render(e) {
     const urls = (e.d || "").match(/https?:\/\/\S+/g) || [];
-    const note = (e.d || "").replace(/\s*https?:\/\/\S+\s*/g, " ").trim();
+    // фрагмент со ссылкой выкидываем целиком: «вишлист» без ссылки бессмыслен
+    const note = (e.d || "").split(/[,;\n]|(?<=\.)\s/)
+      .filter(p => p.trim() && !p.includes("http"))
+      .map(p => p.trim().replace(/^[.\s]+|[.\s]+$/g, "")).join(", ");
     let html = `<div class="event"><h1>📌 ${esc(e.t)}</h1>` +
       `<div class="row sub">🕐 ${fmt(e)}${e.a ? " · весь день" : ""}</div>`;
     if (e.l) html += `<div class="row sub">📍 ${esc(e.l)}</div>`;
