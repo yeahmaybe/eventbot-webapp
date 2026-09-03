@@ -339,6 +339,11 @@
       const r = t.target.dataset.r;
       if (!r) return;
       tg.HapticFeedback?.impactOccurred("light");
+      if (localStorage.getItem(rsvpKey) === r) {
+        localStorage.removeItem(rsvpKey);  // повторный тап — снять ответ
+        render(ev);
+        return;
+      }
       localStorage.setItem(rsvpKey, r);
       render(ev);
       document.querySelector(`#rsvp button[data-r="${r}"]`)?.classList.add("just");
