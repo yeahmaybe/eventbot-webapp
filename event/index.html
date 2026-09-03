@@ -173,9 +173,17 @@
     to { opacity: 1; transform: none; }
   }
   .intro .event { animation: rise .5s cubic-bezier(.22, 1, .36, 1) both; }
-  .intro #cal { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .08s both; }
-  .intro #map { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .16s both; }
-  .intro .foot { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .24s both; }
+  .intro #cal { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .16s both; }
+  .intro #map { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .24s both; }
+  .intro #links { animation: rise .5s cubic-bezier(.22, 1, .36, 1) .08s both; }
+  .intro .tabs { animation: rise .5s cubic-bezier(.22, 1, .36, 1) both; }
+  .intro #fund, .intro .scan, .intro .plist, .intro .receipt, .intro .total {
+    animation: rise .5s cubic-bezier(.22, 1, .36, 1) .16s both; }
+  .intro .rsvpbar { animation: riseup .45s cubic-bezier(.22, 1, .36, 1) .3s both; }
+  @keyframes riseup {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: none; }
+  }
   @keyframes pop {
     0% { transform: scale(.92); }
     60% { transform: scale(1.02); }
