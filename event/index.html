@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
 <title>Событие</title>
+<!-- адрес API бота (участники, голоса). Пусто — голос хранится только на этом устройстве -->
+<meta name="api-base" content="">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   /* своя палитра, чтобы вид не зависел от фона клиента Telegram */
@@ -87,6 +89,32 @@
   .spoiler.open { color: var(--text); border-color: var(--hint); }
   .spoiler .caret { transition: transform .3s cubic-bezier(.22,1,.36,1); font-size: 12px; }
   .spoiler.open .caret { transform: rotate(180deg); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; padding: 10px; border-radius: 12px; font-size: 14px; font-weight: 500;
+    background: transparent; color: var(--hint); border: 1px solid var(--line); cursor: pointer;
+    transition: background .2s ease, color .2s ease;
+  }
+  .tab.on { background: var(--card); color: var(--text); }
+  .plist { display: flex; flex-direction: column; gap: 8px; }
+  .person {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 12px; padding: 10px 12px; font-size: 15px; cursor: pointer;
+    transition: transform .05s;
+  }
+  .person:active { transform: scale(.98); }
+  .person.static { cursor: default; }
+  .person .ava {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    background: color-mix(in srgb, var(--hint) 25%, var(--card));
+  }
+  .person.yes .ava { background: color-mix(in srgb, #3d9a63 25%, var(--card)); color: #3d9a63; }
+  .person .who { display: flex; flex-direction: column; min-width: 0; }
+  .person .un { font-size: 12px; color: var(--hint); }
+  .empty { color: var(--hint); font-size: 14px; padding: 8px 4px; }
   .rsvpbar {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
     display: flex; gap: 8px; max-width: 480px; margin: 0 auto;
@@ -186,6 +214,45 @@
   }
   const payload = getPayload();
   const app = document.getElementById("app");
+  const API = (document.querySelector('meta[name="api-base"]')?.content || "").replace(/\/$/, "");
+  let people = null;   // {creator, going, not_going, me} с API; null — API нет
+  let tab = "event";
+
+  async function loadPeople(id) {
+    if (!API || !id) return;
+    try {
+      const r = await fetch(`${API}/api/event/${id}?initData=${encodeURIComponent(tg.initData || "")}`);
+      if (r.ok) { people = await r.json(); render(ev); }
+    } catch (e) {}
+  }
+  async function sendRsvp(id, answer) {
+    const r = await fetch(`${API}/api/rsvp`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initData: tg.initData || "", id, answer }),
+    });
+    if (r.ok) people = await r.json();
+  }
+
+  function initials(name) {
+    return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join("");
+  }
+  function personRow(p, cls, label) {
+    const clickable = Boolean(p.username);
+    return `<button class="person ${cls}${clickable ? "" : " static"}" ${clickable ? `data-u="${esc(p.username)}"` : ""}>` +
+      `<span class="ava">${esc(initials(p.name || "?"))}</span>` +
+      `<span class="who"><span>${esc(p.name || "Без имени")}${label ? ` · <span class="un">${label}</span>` : ""}</span>` +
+      `${p.username ? `<span class="un">@${esc(p.username)}</span>` : ""}</span></button>`;
+  }
+  function renderPeople() {
+    const { creator, going, not_going } = people;
+    let html = "";
+    if (creator) html += `<div class="label">Организатор</div><div class="plist">${personRow(creator, "yes")}</div>`;
+    html += `<div class="label">Идут · ${going.length}</div><div class="plist">` +
+      (going.length ? going.map(p => personRow(p, "yes")).join("") : `<div class="empty">Пока никто не отметился</div>`) + `</div>`;
+    if (not_going.length)
+      html += `<div class="label">Не идут · ${not_going.length}</div><div class="plist">${not_going.map(p => personRow(p, "no")).join("")}</div>`;
+    return html;
+  }
 
   function utc(m) { return new Date(m * 60000); }
   function gdate(d) { return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, ""); }
@@ -316,15 +383,31 @@
     let h = 5381;
     for (const c of (payload || "")) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
     const rsvpKey = "rsvp_" + (e.i || h.toString(36));
-    const my = localStorage.getItem(rsvpKey);
+    // голос: с API — из базы бота (учитывает и «я приду» текстом в чате), иначе локальный
+    const my = people ? people.me : localStorage.getItem(rsvpKey);
+    if (people) {
+      const n = people.going.length;
+      html = `<div class="tabs">` +
+        `<button class="tab${tab === "event" ? " on" : ""}" data-t="event">Событие</button>` +
+        `<button class="tab${tab === "people" ? " on" : ""}" data-t="people">Участники${n ? " · " + n : ""}</button></div>` +
+        (tab === "event" ? html : renderPeople());
+    }
+    if (tab === "event") {
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
     if (e.l) html += `<div id="map">${section("Показать на карте", MAPS, localStorage.getItem("fav_map") || "yandex")}</div>`;
+    }
     // прилипающая панель снизу — удобно тыкать большим пальцем
     const vote = (v, label) =>
       `<button class="${my === v ? "sel" : (my ? "dim" : "")}" data-r="${v}">${label}</button>`;
     html += `<div class="rsvpbar" id="rsvp">${vote("n", "Не приду")}${vote("y", "Приду")}</div>`;
     app.innerHTML = html;
 
+    document.querySelectorAll(".tab").forEach(b => b.onclick = () => { tab = b.dataset.t; render(ev); });
+    document.querySelectorAll(".person[data-u]").forEach(b => b.onclick = () => {
+      tg.HapticFeedback?.impactOccurred("light");
+      const url = "https://t.me/" + b.dataset.u;
+      inTelegram ? tg.openTelegramLink(url) : go(url);  // открыть профиль
+    });
     wire("cal", "fav_cal", k => CALS[k].act(e));
     wire("map", "fav_map", k => go(MAPS[k].url(e.l)));
     if (urls.length) {
@@ -341,18 +424,19 @@
         }
       };
     }
-    document.getElementById("rsvp").onclick = t => {
+    document.getElementById("rsvp").onclick = async t => {
       const r = t.target.dataset.r;
       if (!r) return;
       tg.HapticFeedback?.impactOccurred("light");
-      if (localStorage.getItem(rsvpKey) === r) {
-        localStorage.removeItem(rsvpKey);  // повторный тап — снять ответ
-        render(ev);
-        return;
+      const current = people ? people.me : localStorage.getItem(rsvpKey);
+      const next = current === r ? null : r;  // повторный тап — снять ответ
+      if (people && e.i) {
+        try { await sendRsvp(e.i, next); } catch (err) {}
+      } else {
+        next ? localStorage.setItem(rsvpKey, next) : localStorage.removeItem(rsvpKey);
       }
-      localStorage.setItem(rsvpKey, r);
       render(ev);
-      document.querySelector(`#rsvp button[data-r="${r}"]`)?.classList.add("just");
+      if (next) document.querySelector(`#rsvp button[data-r="${next}"]`)?.classList.add("just");
     };
   }
 
@@ -385,6 +469,7 @@
     document.body.classList.add("intro");  // каскад только при первом открытии
     render(ev);
     setTimeout(() => document.body.classList.remove("intro"), 900);
+    loadPeople(ev.i);  // участники и мой голос — из базы бота, если есть API
     if (new URLSearchParams(location.search).get("dl") === "1") downloadIcs(ev);  // пришли из Telegram за .ics
   }
   else app.innerHTML = payload
