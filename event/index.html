@@ -290,8 +290,8 @@
   }
 
   function render(e) {
-    const urls = (e.d || "").match(/https?:\/\/\S+/g) || [];
-    // фрагмент со ссылкой выкидываем целиком: «вишлист» без ссылки бессмыслен
+    // ссылки приходят отдельным полем; из описания их вычищаем на всякий случай
+    const urls = (e.u || []).concat((e.d || "").match(/https?:\/\/\S+/g) || []);
     const note = (e.d || "").split(/[,;\n]|(?<=\.)\s/)
       .filter(p => p.trim() && !p.includes("http"))
       .map(p => p.trim().replace(/^[.\s]+|[.\s]+$/g, "")).join(", ");
