@@ -306,7 +306,10 @@
         `<span>Ссылки · ${urls.length}</span><span class="caret">▾</span></button>` +
         `<div class="altwrap"><div class="altclip"><div class="alts col">${items}</div></div></div></div>`;
     }
-    const rsvpKey = "rsvp_" + (payload || "").slice(-24);
+    // ключ от всего payload: у разных событий хвосты могут совпадать
+    let h = 5381;
+    for (const c of (payload || "")) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
+    const rsvpKey = "rsvp_" + h.toString(36);
     const my = localStorage.getItem(rsvpKey);
     html += `<div id="cal">${section("Добавить в календарь", CALS, localStorage.getItem("fav_cal") || "google")}</div>`;
     if (e.l) html += `<div id="map">${section("Показать на карте", MAPS, localStorage.getItem("fav_map") || "yandex")}</div>`;
